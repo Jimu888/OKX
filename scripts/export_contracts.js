@@ -516,8 +516,8 @@ async function exportOrdersByTime(client, instType, instId, outPath, daysBack) {
       instType,
       status: 'archive',
       instId,
-      begin,
-      end,
+      begin: String(begin),
+      end: String(end),
     }, ['ordId', 'clOrdId', 'billId']);
     for (const row of data) {
       w.write(row);
@@ -537,8 +537,8 @@ async function exportFillsByTime(client, instType, instId, outPath, daysBack) {
       instType,
       archive: true,
       instId,
-      begin,
-      end,
+      begin: String(begin),
+      end: String(end),
     }, ['tradeId', 'fillId', 'ordId']);
     for (const row of data) {
       w.write(row);
