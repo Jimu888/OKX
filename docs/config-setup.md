@@ -35,7 +35,13 @@
 
 如果目录不存在，也请先把目录创建出来。
 
+![配置步骤 1：准备配置文件目录](./config-setup/config-setup-01.png)
+
 ## 第二步：把 API 信息写进去
+
+请把你刚刚创建好的 API Key、Secret Key 和 Passphrase 写入配置文件。
+
+![配置步骤 2：填写 API 信息到 config.toml](./config-setup/config-setup-02.png)
 
 ## 推荐配置示例
 
@@ -70,6 +76,10 @@ pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile myokx -Days 90 -Name �
 ```
 
 ## 第三步：保存后再让 agent 继续
+
+保存完成后，确认文件内容无误，再让 agent 继续后面的抓数和分析流程。
+
+![配置步骤 3：保存完成后再让 agent 继续](./config-setup/config-setup-03.png)
 
 当你已经把 API 信息写入配置文件后，再告诉 agent：
 

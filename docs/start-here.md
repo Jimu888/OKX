@@ -6,7 +6,10 @@
 
 请先阅读：
 
-- `docs/okx-api-setup.md`
+- GitHub 页面：
+  `https://github.com/Jimu888/OKX/blob/main/docs/okx-api-setup.md`
+- 仓库文件：
+  `docs/okx-api-setup.md`
 
 这里会教你：
 
@@ -24,7 +27,10 @@
 
 请继续阅读：
 
-- `docs/config-setup.md`
+- GitHub 页面：
+  `https://github.com/Jimu888/OKX/blob/main/docs/config-setup.md`
+- 仓库文件：
+  `docs/config-setup.md`
 
 这里会教你：
 
@@ -48,6 +54,10 @@
 ```
 
 ## 第 4 步：开始运行
+
+如果你希望 agent 在第一次引导时直接给出一个统一入口，最适合发送这个链接：
+
+- `https://github.com/Jimu888/OKX/blob/main/docs/start-here.md`
 
 准备好之后，再运行项目流程。
 

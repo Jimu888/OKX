@@ -57,6 +57,12 @@ All OKX credentials are read from `~/.okx/config.toml` (Agent Trade Kit profile)
 创建完成后，不用把 API Key 直接发给我。你只需要把它保存到 `~/.okx/config.toml`，我再继续帮你抓取数据、生成报告和网页。
 ```
 
+如果你可以直接给用户发链接，优先发送这些 GitHub 教程页面：
+
+- `https://github.com/Jimu888/OKX/blob/main/docs/start-here.md`
+- `https://github.com/Jimu888/OKX/blob/main/docs/okx-api-setup.md`
+- `https://github.com/Jimu888/OKX/blob/main/docs/config-setup.md`
+
 引导用户时，优先让他们查看：
 
 - `docs/start-here.md`

@@ -65,6 +65,17 @@ def read_letter_markdown(path):
     return title, subtitle, blocks
 
 
+def safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except Exception:
+        return default
+
+
+def fmt_pct(value):
+    return f'{safe_float(value) * 100:.1f}%'
+
+
 def block_to_html(block):
     if block.startswith('——'):
         return f'<p class="signature">{html.escape(block)}</p>'
@@ -89,6 +100,23 @@ def chunk_blocks(blocks, size=3):
     return [blocks[index:index + size] for index in range(0, len(blocks), size)]
 
 
+def build_metric_cards(analysis):
+    bills = analysis.get('bills_summary', {})
+    orders = analysis.get('orders_summary', {})
+    by_inst = analysis.get('by_instrument_bills', [])
+    best = by_inst[0] if by_inst else {'instId': '主力品种', 'net': 0}
+    worst = sorted(by_inst, key=lambda row: safe_float(row.get('net')))[0] if by_inst else {'instId': '风险品种', 'net': 0}
+
+    return [
+        ('合约净收益', fmt_money(bills.get('net_total', 0))),
+        ('手续费', fmt_money(bills.get('fee_total', 0))),
+        ('胜率', fmt_pct(orders.get('quality_order', {}).get('win_rate', 0))),
+        ('最大回撤', fmt_money(orders.get('equity_order', {}).get('max_drawdown', 0))),
+        (f'{best.get("instId", "主力品种")} 净结果', fmt_money(best.get('net', 0))),
+        (f'{worst.get("instId", "风险品种")} 净结果', fmt_money(worst.get('net', 0))),
+    ]
+
+
 def render_agent_letter_page(template_html, analysis, letter_md_path):
     title, subtitle, blocks = read_letter_markdown(letter_md_path)
     content_blocks = [block for block in blocks if block.strip()]
@@ -107,6 +135,27 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
         '那些反复出现的东西',
         '真正需要留下来的',
     ]
+    metric_cards = build_metric_cards(analysis)
+    metric_html = '\n'.join(
+        f'''<div class="metric">
+                <div class="label">{html.escape(label)}</div>
+                <div class="value">{html.escape(value)}</div>
+              </div>'''
+        for label, value in metric_cards[:4]
+    )
+    split_html = ''
+    if len(metric_cards) >= 6:
+        split_html = f'''
+          <div class="split">
+            <div class="mini">
+              <h4>{html.escape(metric_cards[4][0])}</h4>
+              <p><span class="highlight">{html.escape(metric_cards[4][1])}</span></p>
+            </div>
+            <div class="mini">
+              <h4>{html.escape(metric_cards[5][0])}</h4>
+              <p><span class="highlight">{html.escape(metric_cards[5][1])}</span></p>
+            </div>
+          </div>'''
 
     section_html = []
     for index, group in enumerate(chunk_blocks(body_blocks, size=3), start=1):
@@ -114,6 +163,7 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
         lead_text = next((block for block in group if not block.startswith('——')), group[0])
         aside_copy = first_sentence(lead_text, '这段话更像是慢慢把问题说透。')
         heading = section_titles[(index - 1) % len(section_titles)]
+        extra_block = split_html if index == 1 else ''
         section_html.append(
             f'''
     <section class="section">
@@ -125,6 +175,7 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
         </aside>
         <article class="content-card">
           {article_html}
+          {extra_block}
         </article>
       </div>
     </section>'''
@@ -140,9 +191,17 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
           {html.escape(subtitle or "这不是一份冷冰冰的报告。更像是一封认真写下来的长信，把你这段时间和市场之间的关系，慢慢摊开给你看。")}
         </p>
 
-        <div class="panel">
-          <h3>开场的话</h3>
-          <p class="keyline">{html.escape(first_sentence(intro_block, intro_block))}</p>
+        <div class="hero-grid">
+          <div class="panel">
+            <h3>开场的话</h3>
+            <p class="keyline">{html.escape(first_sentence(intro_block, intro_block))}</p>
+          </div>
+          <div class="panel">
+            <h3>关键数据</h3>
+            <div class="metrics">
+              {metric_html}
+            </div>
+          </div>
         </div>
       </div>
     </section>

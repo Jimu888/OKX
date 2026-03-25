@@ -20,6 +20,12 @@ One-command pipeline to:
 - `docs/okx-api-setup.md`
 - `docs/config-setup.md`
 
+如果是发给普通用户，建议 agent 直接发送 GitHub 教程链接：
+
+- `https://github.com/Jimu888/OKX/blob/main/docs/start-here.md`
+- `https://github.com/Jimu888/OKX/blob/main/docs/okx-api-setup.md`
+- `https://github.com/Jimu888/OKX/blob/main/docs/config-setup.md`
+
 重要提醒：
 
 - 这个项目只需要读取历史交易数据
