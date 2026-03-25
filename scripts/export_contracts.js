@@ -4,7 +4,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 
 const MCP_REQUEST_TIMEOUT_MS = 15000;
 
@@ -234,6 +234,38 @@ function buildLauncherFromCustom(commandText) {
   return { command: parts[0], baseArgs: parts.slice(1) };
 }
 
+function uniqueLaunchers(launchers) {
+  const seen = new Set();
+  return launchers.filter((launcher) => {
+    const key = `${launcher.command}\0${launcher.baseArgs.join('\0')}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function resolveCommandPaths(binName) {
+  const resolver = process.platform === 'win32' ? 'where' : 'which';
+  const result = spawnSync(resolver, [binName], { env: process.env, encoding: 'utf8' });
+  if (result.status !== 0) return [];
+  return (result.stdout || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function resolveNodeEntryFromShim(shimPath) {
+  try {
+    const content = fs.readFileSync(shimPath, 'utf8');
+    const match = content.match(/"%~dp0\\([^"\r\n]+\.js)"/i);
+    if (!match) return '';
+    const rel = match[1].replace(/\\/g, path.sep);
+    return path.resolve(path.dirname(shimPath), rel);
+  } catch {
+    return '';
+  }
+}
+
 function spawnAndCollect(command, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args, { env: process.env });
@@ -303,19 +335,34 @@ function buildMcpLaunchers(profile) {
   }
 
   const commonArgs = ['--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log'];
+  const resolved = resolveCommandPaths('okx-trade-mcp')
+    .flatMap((shimPath) => {
+      const launchers = [];
+      if (process.platform === 'win32' && shimPath.toLowerCase().endsWith('.cmd')) {
+        const entry = resolveNodeEntryFromShim(shimPath);
+        if (entry) {
+          launchers.push({ command: process.execPath, baseArgs: [entry, ...commonArgs] });
+        }
+      }
+      launchers.push({ command: shimPath, baseArgs: commonArgs });
+      return launchers;
+    });
+
   if (process.platform === 'win32') {
-    return [
+    return uniqueLaunchers([
+      ...resolved,
       { command: 'okx-trade-mcp.cmd', baseArgs: commonArgs },
       { command: 'okx-trade-mcp', baseArgs: commonArgs },
       { command: 'npx.cmd', baseArgs: ['-y', '@okx_ai/okx-trade-mcp', ...commonArgs] },
       { command: 'cmd', baseArgs: ['/d', '/s', '/c', 'npx', '-y', '@okx_ai/okx-trade-mcp', ...commonArgs] },
-    ];
+    ]);
   }
 
-  return [
+  return uniqueLaunchers([
+    ...resolved,
     { command: 'okx-trade-mcp', baseArgs: commonArgs },
     { command: 'npx', baseArgs: ['-y', '@okx_ai/okx-trade-mcp', ...commonArgs] },
-  ];
+  ]);
 }
 
 async function withMcpClient(profile, fn) {
