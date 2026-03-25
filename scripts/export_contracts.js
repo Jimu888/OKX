@@ -6,6 +6,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
+const MCP_REQUEST_TIMEOUT_MS = 15000;
+
 function parseArgs() {
   const args = process.argv.slice(2);
   const out = { profile: 'live', days: 90, outDir: '' };
@@ -146,7 +148,20 @@ class McpClient {
   request(method, params) {
     return new Promise((resolve, reject) => {
       const id = this.nextId++;
-      this.pending.set(id, { resolve, reject });
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`MCP request timed out: ${method}`));
+      }, MCP_REQUEST_TIMEOUT_MS);
+      this.pending.set(id, {
+        resolve: (value) => {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        reject: (err) => {
+          clearTimeout(timeout);
+          reject(err);
+        },
+      });
       this.sendRaw({ jsonrpc: '2.0', id, method, params });
     });
   }
@@ -162,12 +177,23 @@ class McpClient {
     this.buffer = Buffer.concat([this.buffer, chunk]);
 
     while (true) {
-      const headerEnd = this.buffer.indexOf('\r\n\r\n');
+      const contentIdx = this.findHeaderStart();
+      if (contentIdx === -1) {
+        if (this.buffer.length > 64 * 1024) {
+          this.buffer = this.buffer.subarray(this.buffer.length - 8 * 1024);
+        }
+        return;
+      }
+      if (contentIdx > 0) {
+        this.buffer = this.buffer.subarray(contentIdx);
+      }
+
+      const headerEnd = this.findHeaderEnd();
       if (headerEnd === -1) return;
 
       const headerText = this.buffer.slice(0, headerEnd).toString('utf8');
       const headers = {};
-      for (const line of headerText.split('\r\n')) {
+      for (const line of headerText.split(/\r?\n/)) {
         const idx = line.indexOf(':');
         if (idx === -1) continue;
         headers[line.slice(0, idx).trim().toLowerCase()] = line.slice(idx + 1).trim();
@@ -178,10 +204,11 @@ class McpClient {
         throw new Error(`Invalid MCP message headers: ${headerText}`);
       }
 
-      const totalLen = headerEnd + 4 + len;
+      const separatorLen = this.buffer[headerEnd] === 13 ? 4 : 2;
+      const totalLen = headerEnd + separatorLen + len;
       if (this.buffer.length < totalLen) return;
 
-      const body = this.buffer.slice(headerEnd + 4, totalLen).toString('utf8');
+      const body = this.buffer.slice(headerEnd + separatorLen, totalLen).toString('utf8');
       this.buffer = this.buffer.slice(totalLen);
 
       let msg;
@@ -193,6 +220,20 @@ class McpClient {
 
       this.handleMessage(msg);
     }
+  }
+
+  findHeaderStart() {
+    const exact = this.buffer.indexOf('Content-Length:');
+    if (exact !== -1) return exact;
+
+    const lower = this.buffer.toString('utf8').toLowerCase();
+    return lower.indexOf('content-length:');
+  }
+
+  findHeaderEnd() {
+    const crlf = this.buffer.indexOf('\r\n\r\n');
+    if (crlf !== -1) return crlf;
+    return this.buffer.indexOf('\n\n');
   }
 
   handleMessage(msg) {
@@ -229,6 +270,61 @@ class McpClient {
   }
 }
 
+function splitArgString(value) {
+  if (!value) return [];
+  return value.match(/"[^"]*"|'[^']*'|\S+/g)?.map((part) => part.replace(/^["']|["']$/g, '')) ?? [];
+}
+
+function spawnAndCollect(command, args) {
+  return new Promise((resolve, reject) => {
+    const proc = spawn(command, args, { env: process.env });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout.on('data', (chunk) => {
+      stdout += chunk.toString('utf8');
+    });
+    proc.stderr.on('data', (chunk) => {
+      stderr += chunk.toString('utf8');
+    });
+    proc.on('error', reject);
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(stderr.trim() || stdout.trim() || `Command failed: ${command}`));
+        return;
+      }
+      resolve({ stdout, stderr });
+    });
+  });
+}
+
+function buildCliLauncher(profile) {
+  const custom = process.env.OKX_CLI_CMD?.trim();
+  if (custom) {
+    return {
+      command: custom,
+      baseArgs: splitArgString(process.env.OKX_CLI_ARGS),
+    };
+  }
+
+  if (process.platform === 'win32') {
+    return {
+      command: 'cmd',
+      baseArgs: ['/c', 'npx', '-y', '@okx_ai/okx-trade-cli', '--profile', profile],
+    };
+  }
+
+  return {
+    command: 'npx',
+    baseArgs: ['-y', '@okx_ai/okx-trade-cli', '--profile', profile],
+  };
+}
+
+async function runCliJson(profile, subArgs) {
+  const launcher = buildCliLauncher(profile);
+  const result = await spawnAndCollect(launcher.command, [...launcher.baseArgs, ...subArgs, '--json']);
+  return JSON.parse(result.stdout || '[]');
+}
+
 async function withMcpClient(profile, fn) {
   const custom = process.env.OKX_MCP_CMD?.trim();
   const command = custom || (process.platform === 'win32' ? 'cmd' : 'npx');
@@ -244,6 +340,45 @@ async function withMcpClient(profile, fn) {
   } finally {
     client.stop();
   }
+}
+
+async function exportViaCli(profile, args) {
+  fs.mkdirSync(args.outDir, { recursive: true });
+
+  const swapBills = await runCliJson(profile, ['account', 'bills', '--archive', '--instType', 'SWAP']);
+  const futuresBills = await runCliJson(profile, ['account', 'bills', '--archive', '--instType', 'FUTURES']);
+  fs.writeFileSync(path.join(args.outDir, 'bills_SWAP_archive.jsonl'), swapBills.map((row) => JSON.stringify(row)).join('\n') + (swapBills.length ? '\n' : ''));
+  fs.writeFileSync(path.join(args.outDir, 'bills_FUTURES_archive.jsonl'), futuresBills.map((row) => JSON.stringify(row)).join('\n') + (futuresBills.length ? '\n' : ''));
+
+  const instSet = new Set();
+  for (const row of swapBills) {
+    if (row?.instId) instSet.add(row.instId);
+  }
+  const instIds = Array.from(instSet).sort();
+  fs.writeFileSync(path.join(args.outDir, 'swap_instIds.txt'), instIds.join('\n'));
+
+  const totals = [];
+  for (const instId of instIds) {
+    const safe = instId.replace(/[^A-Za-z0-9\-]/g, '_');
+    const fills = await runCliJson(profile, ['swap', 'fills', '--instId', instId, '--archive']);
+    fs.writeFileSync(path.join(args.outDir, `fills_SWAP_${safe}.jsonl`), fills.map((row) => JSON.stringify(row)).join('\n') + (fills.length ? '\n' : ''));
+
+    const orders = await runCliJson(profile, ['swap', 'orders', '--instId', instId, '--history']);
+    fs.writeFileSync(path.join(args.outDir, `orders_SWAP_${safe}.jsonl`), orders.map((row) => JSON.stringify(row)).join('\n') + (orders.length ? '\n' : ''));
+    totals.push({ instId, fillsN: fills.length, ordN: orders.length, transport: 'cli-fallback' });
+  }
+
+  const summary = {
+    profile,
+    days: args.days,
+    swapBillsN: swapBills.length,
+    futBillsN: futuresBills.length,
+    instIdCount: instIds.length,
+    totals,
+    transport: 'cli-fallback',
+  };
+  fs.writeFileSync(path.join(args.outDir, 'SUMMARY.json'), JSON.stringify(summary, null, 2));
+  return summary;
 }
 
 async function exportBillsArchive(client, instType, outPath) {
@@ -327,58 +462,64 @@ async function exportFillsByTime(client, instType, instId, outPath, daysBack) {
 async function main() {
   const args = parseArgs();
   fs.mkdirSync(args.outDir, { recursive: true });
+  let summary;
+  try {
+    summary = await withMcpClient(args.profile, async (client) => {
+      const swapBillsN = await exportBillsArchive(client, 'SWAP', path.join(args.outDir, 'bills_SWAP_archive.jsonl'));
+      const futBillsN = await exportBillsArchive(client, 'FUTURES', path.join(args.outDir, 'bills_FUTURES_archive.jsonl'));
 
-  const summary = await withMcpClient(args.profile, async (client) => {
-    const swapBillsN = await exportBillsArchive(client, 'SWAP', path.join(args.outDir, 'bills_SWAP_archive.jsonl'));
-    const futBillsN = await exportBillsArchive(client, 'FUTURES', path.join(args.outDir, 'bills_FUTURES_archive.jsonl'));
-
-    const swapPath = path.join(args.outDir, 'bills_SWAP_archive.jsonl');
-    const instSet = new Set();
-    if (fs.existsSync(swapPath)) {
-      const lines = fs.readFileSync(swapPath, 'utf8').split(/\r?\n/).filter(Boolean);
-      for (const line of lines) {
-        try {
-          const o = JSON.parse(line);
-          if (o?.instId) instSet.add(o.instId);
-        } catch {
-          // ignore malformed line
+      const swapPath = path.join(args.outDir, 'bills_SWAP_archive.jsonl');
+      const instSet = new Set();
+      if (fs.existsSync(swapPath)) {
+        const lines = fs.readFileSync(swapPath, 'utf8').split(/\r?\n/).filter(Boolean);
+        for (const line of lines) {
+          try {
+            const o = JSON.parse(line);
+            if (o?.instId) instSet.add(o.instId);
+          } catch {
+            // ignore malformed line
+          }
         }
       }
-    }
-    const instIds = Array.from(instSet).sort();
-    fs.writeFileSync(path.join(args.outDir, 'swap_instIds.txt'), instIds.join('\n'));
+      const instIds = Array.from(instSet).sort();
+      fs.writeFileSync(path.join(args.outDir, 'swap_instIds.txt'), instIds.join('\n'));
 
-    const totals = [];
-    for (const instId of instIds) {
-      const safe = instId.replace(/[^A-Za-z0-9\-]/g, '_');
-      const fillsN = await exportFillsByTime(
-        client,
-        'SWAP',
-        instId,
-        path.join(args.outDir, `fills_SWAP_${safe}.jsonl`),
-        args.days,
-      );
-      const ordN = await exportOrdersByTime(
-        client,
-        'SWAP',
-        instId,
-        path.join(args.outDir, `orders_SWAP_${safe}.jsonl`),
-        args.days,
-      );
-      totals.push({ instId, fillsN, ordN });
-    }
+      const totals = [];
+      for (const instId of instIds) {
+        const safe = instId.replace(/[^A-Za-z0-9\-]/g, '_');
+        const fillsN = await exportFillsByTime(
+          client,
+          'SWAP',
+          instId,
+          path.join(args.outDir, `fills_SWAP_${safe}.jsonl`),
+          args.days,
+        );
+        const ordN = await exportOrdersByTime(
+          client,
+          'SWAP',
+          instId,
+          path.join(args.outDir, `orders_SWAP_${safe}.jsonl`),
+          args.days,
+        );
+        totals.push({ instId, fillsN, ordN, transport: 'mcp' });
+      }
 
-    const summary = {
-      profile: args.profile,
-      days: args.days,
-      swapBillsN,
-      futBillsN,
-      instIdCount: instIds.length,
-      totals,
-    };
-    fs.writeFileSync(path.join(args.outDir, 'SUMMARY.json'), JSON.stringify(summary, null, 2));
-    return summary;
-  });
+      const summary = {
+        profile: args.profile,
+        days: args.days,
+        swapBillsN,
+        futBillsN,
+        instIdCount: instIds.length,
+        totals,
+        transport: 'mcp',
+      };
+      fs.writeFileSync(path.join(args.outDir, 'SUMMARY.json'), JSON.stringify(summary, null, 2));
+      return summary;
+    });
+  } catch (err) {
+    process.stderr.write(`[okx-export] MCP transport failed, falling back to official CLI: ${err?.message ?? err}\n`);
+    summary = await exportViaCli(args.profile, args);
+  }
 
   console.log(JSON.stringify(summary));
 }
