@@ -1,9 +1,11 @@
 ---
-name: okx-trade-history-analyzer
-description: End-to-end OKX CEX trade history export + analysis + report generation using the official OKX Agent Trade Kit and credentials in ~/.okx/config.toml, plus an agent-authored letter and styled HTML page. Use when the user wants their agent to export OKX data, analyze trading behavior, generate a factual report, write a grounded letter from a controlled prompt, and render it as a webpage.
+name: TradeMate
+description: A trading companion system built on the official OKX Agent Trade Kit. It exports OKX history, analyzes trading behavior, identifies patterns and risk sources, generates a grounded report and agent-authored reflection letter, and renders the result as a webpage.
 ---
 
-# OKX Trade History Analyzer (OKX Agent Trade Kit)
+# TradeMate
+
+_Built with OKX Agent Trade Kit_
 
 ## What this skill does
 

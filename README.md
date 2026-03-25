@@ -1,4 +1,6 @@
-﻿# OKX Trade History Analyzer (OKX Agent Trade Kit)
+﻿# TradeMate
+
+_Built with OKX Agent Trade Kit_
 
 One-command pipeline powered by the official OKX Agent Trade Kit to:
 - Export OKX CEX trade history (contracts: SWAP/FUTURES)
