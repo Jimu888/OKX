@@ -275,6 +275,12 @@ function splitArgString(value) {
   return value.match(/"[^"]*"|'[^']*'|\S+/g)?.map((part) => part.replace(/^["']|["']$/g, '')) ?? [];
 }
 
+function buildLauncherFromCustom(commandText) {
+  const parts = splitArgString(commandText);
+  if (!parts.length) return null;
+  return { command: parts[0], baseArgs: parts.slice(1) };
+}
+
 function spawnAndCollect(command, args) {
   return new Promise((resolve, reject) => {
     const proc = spawn(command, args, { env: process.env });
@@ -297,56 +303,90 @@ function spawnAndCollect(command, args) {
   });
 }
 
-function buildCliLauncher(profile) {
+function buildCliLaunchers(profile) {
   const custom = process.env.OKX_CLI_CMD?.trim();
   if (custom) {
-    return {
-      command: custom,
-      baseArgs: splitArgString(process.env.OKX_CLI_ARGS),
-    };
+    const launcher = buildLauncherFromCustom(custom);
+    if (launcher) {
+      launcher.baseArgs.push(...splitArgString(process.env.OKX_CLI_ARGS));
+      return [launcher];
+    }
   }
 
   if (process.platform === 'win32') {
-    return {
-      command: 'cmd',
-      baseArgs: ['/c', 'npx', '-y', '@okx_ai/okx-trade-cli', '--profile', profile],
-    };
+    return [
+      { command: 'okx.cmd', baseArgs: ['--profile', profile] },
+      { command: 'okx', baseArgs: ['--profile', profile] },
+      { command: 'npx.cmd', baseArgs: ['-y', '@okx_ai/okx-trade-cli', '--profile', profile] },
+      { command: 'cmd', baseArgs: ['/d', '/s', '/c', 'npx', '-y', '@okx_ai/okx-trade-cli', '--profile', profile] },
+    ];
   }
 
-  return {
-    command: 'npx',
-    baseArgs: ['-y', '@okx_ai/okx-trade-cli', '--profile', profile],
-  };
+  return [
+    { command: 'okx', baseArgs: ['--profile', profile] },
+    { command: 'npx', baseArgs: ['-y', '@okx_ai/okx-trade-cli', '--profile', profile] },
+  ];
 }
 
 async function runCliJson(profile, subArgs) {
-  const launcher = buildCliLauncher(profile);
-  const result = await spawnAndCollect(launcher.command, [...launcher.baseArgs, ...subArgs, '--json']);
-  return JSON.parse(result.stdout || '[]');
+  const errors = [];
+  for (const launcher of buildCliLaunchers(profile)) {
+    try {
+      process.stderr.write(`[okx-export] trying CLI launcher: ${launcher.command}\n`);
+      const result = await spawnAndCollect(launcher.command, [...launcher.baseArgs, ...subArgs, '--json']);
+      return JSON.parse(result.stdout || '[]');
+    } catch (err) {
+      errors.push(`${launcher.command}: ${err?.message ?? err}`);
+    }
+  }
+  throw new Error(`All CLI launchers failed: ${errors.join(' | ')}`);
+}
+
+function buildMcpLaunchers(profile) {
+  const custom = process.env.OKX_MCP_CMD?.trim();
+  if (custom) {
+    const launcher = buildLauncherFromCustom(custom);
+    if (launcher) return [launcher];
+  }
+
+  const commonArgs = ['--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log'];
+  if (process.platform === 'win32') {
+    return [
+      { command: 'okx-trade-mcp.cmd', baseArgs: commonArgs },
+      { command: 'okx-trade-mcp', baseArgs: commonArgs },
+      { command: 'npx.cmd', baseArgs: ['-y', '@okx_ai/okx-trade-mcp', ...commonArgs] },
+      { command: 'cmd', baseArgs: ['/d', '/s', '/c', 'npx', '-y', '@okx_ai/okx-trade-mcp', ...commonArgs] },
+    ];
+  }
+
+  return [
+    { command: 'okx-trade-mcp', baseArgs: commonArgs },
+    { command: 'npx', baseArgs: ['-y', '@okx_ai/okx-trade-mcp', ...commonArgs] },
+  ];
 }
 
 async function withMcpClient(profile, fn) {
-  const custom = process.env.OKX_MCP_CMD?.trim();
-  const command = custom || (process.platform === 'win32' ? 'cmd' : 'npx');
-  const args = custom
-    ? []
-    : process.platform === 'win32'
-      ? ['/c', 'npx', '-y', '@okx_ai/okx-trade-mcp', '--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log']
-      : ['-y', '@okx_ai/okx-trade-mcp', '--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log'];
-  const client = new McpClient(command, args);
-  try {
-    await client.start();
-    return await fn(client);
-  } finally {
-    client.stop();
+  const errors = [];
+  for (const launcher of buildMcpLaunchers(profile)) {
+    const client = new McpClient(launcher.command, launcher.baseArgs);
+    try {
+      process.stderr.write(`[okx-export] trying MCP launcher: ${launcher.command}\n`);
+      await client.start();
+      return await fn(client);
+    } catch (err) {
+      errors.push(`${launcher.command}: ${err?.message ?? err}`);
+    } finally {
+      client.stop();
+    }
   }
+  throw new Error(`All MCP launchers failed: ${errors.join(' | ')}`);
 }
 
 async function exportViaCli(profile, args) {
   fs.mkdirSync(args.outDir, { recursive: true });
 
-  const swapBills = await runCliJson(profile, ['account', 'bills', '--archive', '--instType', 'SWAP']);
-  const futuresBills = await runCliJson(profile, ['account', 'bills', '--archive', '--instType', 'FUTURES']);
+  const swapBills = await runCliJson(profile, ['account', 'bills', '--archive', '--instType', 'SWAP', '--limit', '100']);
+  const futuresBills = await runCliJson(profile, ['account', 'bills', '--archive', '--instType', 'FUTURES', '--limit', '100']);
   fs.writeFileSync(path.join(args.outDir, 'bills_SWAP_archive.jsonl'), swapBills.map((row) => JSON.stringify(row)).join('\n') + (swapBills.length ? '\n' : ''));
   fs.writeFileSync(path.join(args.outDir, 'bills_FUTURES_archive.jsonl'), futuresBills.map((row) => JSON.stringify(row)).join('\n') + (futuresBills.length ? '\n' : ''));
 
@@ -360,10 +400,10 @@ async function exportViaCli(profile, args) {
   const totals = [];
   for (const instId of instIds) {
     const safe = instId.replace(/[^A-Za-z0-9\-]/g, '_');
-    const fills = await runCliJson(profile, ['swap', 'fills', '--instId', instId, '--archive']);
+    const fills = await runCliJson(profile, ['swap', 'fills', '--instId', instId, '--archive', '--limit', '100']);
     fs.writeFileSync(path.join(args.outDir, `fills_SWAP_${safe}.jsonl`), fills.map((row) => JSON.stringify(row)).join('\n') + (fills.length ? '\n' : ''));
 
-    const orders = await runCliJson(profile, ['swap', 'orders', '--instId', instId, '--history']);
+    const orders = await runCliJson(profile, ['swap', 'orders', '--instId', instId, '--archive', '--limit', '100']);
     fs.writeFileSync(path.join(args.outDir, `orders_SWAP_${safe}.jsonl`), orders.map((row) => JSON.stringify(row)).join('\n') + (orders.length ? '\n' : ''));
     totals.push({ instId, fillsN: fills.length, ordN: orders.length, transport: 'cli-fallback' });
   }
