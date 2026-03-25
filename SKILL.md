@@ -111,13 +111,13 @@ When the user installs or invokes this skill, you should:
 Use the PowerShell pipeline script (recommended):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile live -Days 90 -Name 澜
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile live -Days 60 -Name 澜
 ```
 
 For macOS users with PowerShell 7:
 
 ```bash
-pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile live -Days 90 -Name 澜
+pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile live -Days 60 -Name 澜
 ```
 
 Outputs are written under:

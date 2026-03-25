@@ -1,6 +1,6 @@
 param(
   [string]$Profile = "live",
-  [int]$Days = 90,
+  [int]$Days = 60,
   [string]$Name = "TradeMate"
 )
 

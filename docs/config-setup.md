@@ -66,13 +66,13 @@ passphrase = "你的_passphrase"
 例如：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile myokx -Days 90 -Name 澜
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile myokx -Days 60 -Name 澜
 ```
 
 macOS 如果安装了 PowerShell 7，也可以这样运行：
 
 ```bash
-pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile myokx -Days 90 -Name 澜
+pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile myokx -Days 60 -Name 澜
 ```
 
 ## 第三步：保存后再让 agent 继续

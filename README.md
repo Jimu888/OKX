@@ -42,13 +42,13 @@ One-command pipeline powered by the official OKX Agent Trade Kit to:
 2) Run the pipeline:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile live -Days 90 -Name 澜
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile live -Days 60 -Name 澜
 ```
 
 macOS 如果已安装 PowerShell 7，也可以使用：
 
 ```bash
-pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile live -Days 90 -Name 澜
+pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile live -Days 60 -Name 澜
 ```
 
 3) After the pipeline finishes, ask your agent to open:

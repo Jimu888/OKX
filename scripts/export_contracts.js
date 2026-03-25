@@ -7,10 +7,11 @@ import path from 'node:path';
 import { spawn, spawnSync } from 'node:child_process';
 
 const MCP_REQUEST_TIMEOUT_MS = 15000;
+const TOOL_RETRYABLE_CODES = ['429', '50011', '50040', '50061'];
 
 function parseArgs() {
   const args = process.argv.slice(2);
-  const out = { profile: 'live', days: 90, outDir: '' };
+  const out = { profile: 'live', days: 60, outDir: '' };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--profile') out.profile = args[++i];
@@ -42,6 +43,10 @@ function rangeChunksMs(daysBack, chunkDays = 7) {
     cur = next;
   }
   return chunks;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function toMs(row, keys) {
@@ -77,6 +82,36 @@ function pickCursor(row, candidates) {
     }
   }
   return '';
+}
+
+function isRetryableToolError(err) {
+  const text = String(err?.message ?? err);
+  return TOOL_RETRYABLE_CODES.some((code) => text.includes(`"${code}"`) || text.includes(`code": "${code}"`) || text.includes(`code=${code}`) || text.includes(`HTTP ${code}`));
+}
+
+async function callToolWithRetry(client, name, args, options = {}) {
+  const retries = options.retries ?? 8;
+  const baseDelayMs = options.baseDelayMs ?? 1200;
+  const paceMs = options.paceMs ?? 0;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const data = await client.callTool(name, args);
+      if (paceMs > 0) {
+        await sleep(paceMs);
+      }
+      return data;
+    } catch (err) {
+      if (!isRetryableToolError(err) || attempt === retries) {
+        throw err;
+      }
+      const delayMs = Math.min(60000, baseDelayMs * (2 ** attempt));
+      process.stderr.write(`[okx-export] retry ${name} after rate limit (${attempt + 1}/${retries + 1}), waiting ${delayMs}ms\n`);
+      await sleep(delayMs);
+    }
+  }
+
+  throw new Error(`Unexpected retry exit for ${name}`);
 }
 
 class McpClient {
@@ -439,11 +474,11 @@ async function exportBillsArchive(client, instType, outPath) {
   let after;
   let total = 0;
   for (let i = 0; i < 500; i++) {
-    const data = normalizeResult(await client.callTool('account_get_bills_archive', {
+    const data = normalizeResult(await callToolWithRetry(client, 'account_get_bills_archive', {
       instType,
       limit: 100,
       after,
-    }));
+    }, { baseDelayMs: 2500, paceMs: 450 }));
     if (!Array.isArray(data) || data.length === 0) break;
     for (const row of data) w.write(row);
     total += data.length;
@@ -459,7 +494,10 @@ async function fetchWindowPaged(client, toolName, args, cursorKeys) {
   const rows = [];
   let after;
   for (let i = 0; i < 100; i++) {
-    const page = normalizeResult(await client.callTool(toolName, { ...args, after, limit: 100 }));
+    const page = normalizeResult(await callToolWithRetry(client, toolName, { ...args, after, limit: 100 }, {
+      baseDelayMs: 1200,
+      paceMs: toolName === 'swap_get_fills' ? 180 : 120,
+    }));
     if (!Array.isArray(page) || page.length === 0) break;
     rows.push(...page);
     const cursor = pickCursor(page[page.length - 1], cursorKeys);
