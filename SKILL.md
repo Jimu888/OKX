@@ -59,8 +59,11 @@ All OKX credentials are read from `~/.okx/config.toml` (Agent Trade Kit profile)
 
 引导用户时，优先让他们查看：
 
+- `docs/start-here.md`
 - `docs/okx-api-setup.md`
 - `docs/config-setup.md`
+
+如果要给用户一个统一入口，优先推荐 `docs/start-here.md`。
 
 ## Prerequisites (user)
 

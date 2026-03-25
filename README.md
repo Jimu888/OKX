@@ -16,6 +16,7 @@ One-command pipeline to:
 
 如果你是第一次使用，建议先看这两份中文教程：
 
+- `docs/start-here.md`
 - `docs/okx-api-setup.md`
 - `docs/config-setup.md`
 
@@ -27,6 +28,10 @@ One-command pipeline to:
 - 不要开启“提币”权限
 - 不建议把 API Key 直接发给 agent
 - 更推荐由你自己写入 `~/.okx/config.toml`
+
+如果你想让 agent 直接引导用户，最推荐先让用户打开：
+
+- `docs/start-here.md`
 
 2) Run the pipeline:
 
