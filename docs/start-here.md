@@ -1,5 +1,7 @@
 # 新手开始这里
 
+这份入口页是给使用官方 OKX Agent Trade Kit 的用户看的。
+
 如果你是第一次使用这个项目，建议先按下面顺序操作。
 
 ## 第 1 步：先看 API 创建教程
@@ -16,6 +18,7 @@
 - 如何在 OKX 网页版创建 API Key
 - 如何在 OKX 手机 App 创建 API Key
 - 如何确保只开启“读取”权限
+- 为什么这些凭证要写入 `~/.okx/config.toml`，让官方 OKX Agent Trade Kit 读取
 
 重要提醒：
 
@@ -38,6 +41,7 @@
 - Windows 用户应该写到哪个路径
 - macOS 用户应该写到哪个路径
 - 如何填写 `~/.okx/config.toml`
+- 为什么要让官方 OKX Agent Trade Kit 从配置文件读取，而不是把 key 直接发给 agent
 
 ## 第 3 步：不要直接把 API Key 发给 agent
 
@@ -51,6 +55,12 @@
 
 ```text
 我已经看过教程，并把 OKX API Key 保存到配置文件里了，你可以继续帮我执行后面的数据抓取、分析和网页生成。
+```
+
+如果需要点明取数方式，可以补一句：
+
+```text
+请使用官方 OKX Agent Trade Kit 读取这些配置继续执行。
 ```
 
 ## 第 4 步：开始运行

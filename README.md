@@ -1,13 +1,13 @@
-﻿# OKX Trade History Analyzer (Agent Trade Kit)
+﻿# OKX Trade History Analyzer (OKX Agent Trade Kit)
 
-One-command pipeline to:
+One-command pipeline powered by the official OKX Agent Trade Kit to:
 - Export OKX CEX trade history (contracts: SWAP/FUTURES)
 - Analyze behavior/performance
 - Generate an objective report, an agent writing task, and a final letter webpage
 
 ## Quick start
 
-1) Configure your OKX API credentials in `~/.okx/config.toml` (Agent Trade Kit profile format).
+1) Configure your OKX API credentials in `~/.okx/config.toml` so the official OKX Agent Trade Kit can read them.
 
 配置文件路径：
 
@@ -28,12 +28,12 @@ One-command pipeline to:
 
 重要提醒：
 
-- 这个项目只需要读取历史交易数据
+- 这个项目会通过官方 OKX Agent Trade Kit 读取历史交易数据
 - 创建 API Key 时只开启“读取”权限
 - 不要开启“交易”权限
 - 不要开启“提币”权限
 - 不建议把 API Key 直接发给 agent
-- 更推荐由你自己写入 `~/.okx/config.toml`
+- 更推荐由你自己写入 `~/.okx/config.toml`，再由官方 OKX Agent Trade Kit 读取
 
 如果你想让 agent 直接引导用户，最推荐先让用户打开：
 

@@ -1,16 +1,16 @@
 # 配置文件填写教程
 
-这份教程用于帮助用户把 OKX API 信息保存到本项目指定的配置文件中，而不是直接发给 agent。
+这份教程用于帮助用户把 OKX API 信息保存到本项目指定的配置文件中，让官方 OKX Agent Trade Kit 去读取，而不是直接发给 agent。
 
 ## 为什么推荐写入配置文件
 
-很多 agent 默认不愿意直接接收 API Key，这也是更安全的做法。
+很多 agent 默认不愿意直接接收 API Key，这也是更安全的做法。我们的流程会让官方 OKX Agent Trade Kit 从本地配置文件读取凭证。
 
 推荐流程是：
 
 1. 用户自己在 OKX 创建只读 API Key
 2. 用户自己把 API Key / Secret / Passphrase 写入本地配置文件
-3. agent 只读取配置文件并继续执行分析流程
+3. agent 只读取配置文件并继续执行分析流程，官方 OKX Agent Trade Kit 负责取数
 
 ## 配置文件路径
 
@@ -77,7 +77,7 @@ pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile myokx -Days 90 -Name �
 
 ## 第三步：保存后再让 agent 继续
 
-保存完成后，确认文件内容无误，再让 agent 继续后面的抓数和分析流程。
+保存完成后，确认文件内容无误，再让 agent 继续后面的抓数和分析流程。此时由官方 OKX Agent Trade Kit 读取配置文件。
 
 ![配置步骤 3：保存完成后再让 agent 继续](./config-setup/config-setup-03.png)
 
@@ -111,5 +111,5 @@ pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile myokx -Days 90 -Name �
 你可以把 API Key、Secret Key 和 Passphrase 保存到：
 `~/.okx/config.toml`
 
-保存好之后告诉我一声，我会继续帮你执行后面的数据抓取、分析、报告生成和网页渲染。
+保存好之后告诉我一声，我会继续帮你通过官方 OKX Agent Trade Kit 执行后面的数据抓取、分析、报告生成和网页渲染。
 ```
