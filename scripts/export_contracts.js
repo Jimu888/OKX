@@ -58,7 +58,13 @@ function normalizeResult(result) {
   if (Array.isArray(result)) return result;
   if (result && typeof result === 'object') {
     if (Array.isArray(result.data)) return result.data;
+    if (result.data && typeof result.data === 'object' && Array.isArray(result.data.data)) return result.data.data;
     if (result.structuredContent && Array.isArray(result.structuredContent.data)) return result.structuredContent.data;
+    if (result.structuredContent && typeof result.structuredContent === 'object') {
+      if (result.structuredContent.data && Array.isArray(result.structuredContent.data.data)) {
+        return result.structuredContent.data.data;
+      }
+    }
   }
   return [];
 }
@@ -215,10 +221,17 @@ class McpClient {
     }
     const structured = result?.structuredContent;
     if (structured && typeof structured === 'object' && Array.isArray(structured.data)) return structured.data;
+    if (structured && typeof structured === 'object' && structured.data && Array.isArray(structured.data.data)) {
+      return structured.data.data;
+    }
     const firstText = Array.isArray(result?.content) ? result.content.find((c) => c?.type === 'text')?.text : '';
     if (!firstText) return [];
     const parsed = JSON.parse(firstText);
+    if (parsed?.ok === false || parsed?.isError) {
+      throw new Error(parsed?.message || parsed?.error?.message || `Tool call failed: ${name}`);
+    }
     if (parsed && typeof parsed === 'object' && Array.isArray(parsed.data)) return parsed.data;
+    if (parsed && typeof parsed === 'object' && parsed.data && Array.isArray(parsed.data.data)) return parsed.data.data;
     return [];
   }
 }
