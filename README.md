@@ -1,4 +1,4 @@
-﻿# TradeMate
+﻿# TradeMate Demo
 
 _Built with OKX Agent Trade Kit_
 
