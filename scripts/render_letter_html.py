@@ -193,11 +193,11 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
 
         <div class="hero-grid">
           <div class="panel">
-            <h3>开场的话</h3>
+            <h3>核心判断</h3>
             <p class="keyline">{html.escape(first_sentence(intro_block, intro_block))}</p>
           </div>
           <div class="panel">
-            <h3>关键数据</h3>
+            <h3>文中关键数字</h3>
             <div class="metrics">
               {metric_html}
             </div>

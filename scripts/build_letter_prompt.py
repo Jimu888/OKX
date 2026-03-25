@@ -58,6 +58,7 @@ def build_fact_pack(analysis):
     fills = analysis.get('fills_summary', {})
     orders = analysis.get('orders_summary', {})
     by_inst = analysis.get('by_instrument_bills', [])
+    by_inst_behavior = analysis.get('by_instrument_behavior', [])
 
     q = orders.get('quality_order', {})
     e = orders.get('equity_order', {})
@@ -98,6 +99,35 @@ def build_fact_pack(analysis):
                 for row in bottom_rows
             )
         )
+
+    if by_inst_behavior:
+        favorite_limit = 3 if len(by_inst_behavior) >= 6 else 2 if len(by_inst_behavior) >= 3 else 1
+        favorite_rows = by_inst_behavior[:favorite_limit]
+        favorite_parts = []
+        for row in favorite_rows:
+            highlights = []
+            if abs(safe_float(row.get('net'))) >= 1e-9:
+                highlights.append(f'净收益 {fmt_money(row.get("net"))} USDT')
+            if row.get('win_rate', 0) > 0:
+                highlights.append(f'胜率 {fmt_pct(row.get("win_rate"))}')
+            favorite_parts.append(
+                f'{row.get("instId", "UNKNOWN")}（{row.get("n", 0)} 次，{row.get("active_days", 0)} 天，' +
+                '，'.join(highlights[:2]) + '）'
+            )
+        facts.append('最常交易品种：' + '；'.join(favorite_parts))
+
+        repeated_weak = [
+            row for row in by_inst_behavior
+            if row.get('n', 0) >= 3 and row.get('active_days', 0) >= 2
+        ]
+        if repeated_weak:
+            repeated_weak.sort(key=lambda row: (row.get('win_rate', 0), row.get('net', 0), -row.get('n', 0)))
+            weak = repeated_weak[0]
+            facts.append(
+                '反复交易但胜率较差的品种：'
+                f'{weak.get("instId", "UNKNOWN")}（{weak.get("n", 0)} 次，{weak.get("active_days", 0)} 天，'
+                f'胜率 {fmt_pct(weak.get("win_rate"))}，净收益 {fmt_money(weak.get("net"))} USDT）'
+            )
 
     best_hours = top_hours(fills.get('by_hour_cn', {}), reverse=True)
     worst_hours = top_hours(fills.get('by_hour_cn', {}), reverse=False)
@@ -178,6 +208,7 @@ def build_prompt(character_name, report_text, fact_pack, output_path):
 9. 不要在信里使用固定称呼如“几木”，除非材料里明确给出了用户希望被这样称呼
 10. 标题必须由你根据本次数据自己提炼，不能使用默认标题如“{character_name} 的信”或“写给你的一封信”
 11. 开场第一段必须高度精炼地概括该用户最突出的交易习惯、交易方式或性格特点，不能写成“我看了你很久”“我有很多想法想跟你聊聊”这类空泛开场
+12. 如果事实包里提供了“最常交易品种”或“反复交易但胜率较差的品种”，请自然写进正文，帮助用户看见自己的偏好和盲点
 
 ## 风格边界
 

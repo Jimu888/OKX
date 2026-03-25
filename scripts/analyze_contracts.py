@@ -71,6 +71,47 @@ def summarize_pnl(pnls):
     return dict(win_rate=win_rate, avg_win=avg_win, avg_loss=avg_loss, profit_factor=profit_factor, rr=rr)
 
 
+def instrument_behavior_summary(fill_rows):
+    by_inst = defaultdict(lambda: {
+        'net': 0.0,
+        'pnl': 0.0,
+        'fee': 0.0,
+        'n': 0,
+        'wins': 0,
+        'losses': 0,
+        'days': set(),
+    })
+    for t, inst_id, pnl, fee in fill_rows:
+        net = pnl + fee
+        row = by_inst[inst_id]
+        row['net'] += net
+        row['pnl'] += pnl
+        row['fee'] += fee
+        row['n'] += 1
+        row['days'].add(t.astimezone(CN_TZ).date().isoformat())
+        if net > 0:
+            row['wins'] += 1
+        elif net < 0:
+            row['losses'] += 1
+
+    summary = []
+    for inst_id, row in by_inst.items():
+        total = row['n']
+        win_rate = row['wins'] / total if total else 0.0
+        summary.append({
+            'instId': inst_id,
+            'net': row['net'],
+            'pnl': row['pnl'],
+            'fee': row['fee'],
+            'n': total,
+            'active_days': len(row['days']),
+            'win_rate': win_rate,
+        })
+
+    summary.sort(key=lambda item: (item.get('n', 0), item.get('active_days', 0), abs(item.get('net', 0))), reverse=True)
+    return summary
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--raw', required=True)
@@ -199,6 +240,7 @@ def main():
     for sym,v in by_symbol_bill.items():
         sym_bill.append({'instId': sym, **v})
     sym_bill.sort(key=lambda x: x.get('net',0.0), reverse=True)
+    by_instrument_behavior = instrument_behavior_summary(fill_rows)
 
     coverage={
         'raw_dir': raw,
@@ -217,7 +259,8 @@ def main():
         'bills_summary': bills_summary,
         'fills_summary': fills_summary,
         'orders_summary': orders_summary,
-        'by_instrument_bills': sym_bill
+        'by_instrument_bills': sym_bill,
+        'by_instrument_behavior': by_instrument_behavior,
     }
 
     with open(os.path.join(out,'analysis.json'),'w',encoding='utf-8') as f:
