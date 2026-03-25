@@ -192,7 +192,7 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
   <main class="wrap">
     <section class="hero">
       <div class="hero-card">
-        <div class="eyebrow">Letter · Trading Reflection · v3</div>
+        <div class="eyebrow">TradeMate Demo 0.1</div>
         <h1>{html.escape(title)}</h1>
         <p class="subtitle">
           {html.escape(subtitle or "这不是一份冷冰冰的报告。更像是一封认真写下来的长信，把你这段时间和市场之间的关系，慢慢摊开给你看。")}
@@ -218,7 +218,8 @@ def render_agent_letter_page(template_html, analysis, letter_md_path):
     <footer>
       <div class="ending">
         <p>{html.escape(first_sentence(body_blocks[-1], intro_block))}</p>
-        <div class="signature">{html.escape(signature or f"—— {title}")}</div>
+        <div class="signature">—— TradeMate</div>
+        <div class="signature">@0xjimumu</div>
       </div>
     </footer>
   </main>'''
