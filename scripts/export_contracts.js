@@ -5,11 +5,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
 
 const MCP_REQUEST_TIMEOUT_MS = 15000;
-const HOME = process.env.USERPROFILE || process.env.HOME;
-const CONFIG_PATH = HOME ? path.join(HOME, '.okx', 'config.toml') : '';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -23,120 +20,6 @@ function parseArgs() {
   if (!out.outDir) throw new Error('Missing --out <dir>');
   if (!Number.isFinite(out.days) || out.days <= 0) throw new Error('Missing or invalid --days');
   return out;
-}
-
-function parseTomlProfiles(tomlText) {
-  const lines = tomlText.split(/\r?\n/);
-  let defaultProfile = 'default';
-  const profiles = {};
-  let cur = null;
-  for (const raw of lines) {
-    const line = raw.trim();
-    if (!line || line.startsWith('#')) continue;
-    const mDef = line.match(/^default_profile\s*=\s*"([^"]+)"/);
-    if (mDef) {
-      defaultProfile = mDef[1];
-      continue;
-    }
-    const mProf = line.match(/^\[profiles\.(.+)\]$/);
-    if (mProf) {
-      cur = mProf[1];
-      profiles[cur] = profiles[cur] || {};
-      continue;
-    }
-    const mKV = line.match(/^([A-Za-z0-9_\-]+)\s*=\s*"?([^"#]+)"?$/);
-    if (mKV && cur) {
-      profiles[cur][mKV[1]] = mKV[2].trim();
-    }
-  }
-  return { defaultProfile, profiles };
-}
-
-function loadProfile(profileName) {
-  if (!CONFIG_PATH || !fs.existsSync(CONFIG_PATH)) {
-    throw new Error(`Missing OKX config: ${CONFIG_PATH || '~/.okx/config.toml'}`);
-  }
-  const toml = fs.readFileSync(CONFIG_PATH, 'utf8');
-  const { defaultProfile, profiles } = parseTomlProfiles(toml);
-  const p = profiles[profileName] || profiles[defaultProfile];
-  if (!p) throw new Error(`Profile not found: ${profileName}`);
-  const apiKey = p.api_key;
-  const secretKey = p.secret_key;
-  const passphrase = p.passphrase;
-  const baseUrl = (p.base_url || 'https://www.okx.com').replace(/\/+$/, '');
-  const demo = String(p.demo || '').toLowerCase() === 'true';
-  if (!apiKey || !secretKey || !passphrase) {
-    throw new Error(`Missing credentials in profile: ${profileName}`);
-  }
-  return { apiKey, secretKey, passphrase, baseUrl, demo };
-}
-
-function isoNow() {
-  return new Date().toISOString();
-}
-
-function sign(secretKey, method, requestPath, query = '') {
-  const ts = isoNow();
-  const prehash = ts + method.toUpperCase() + requestPath + (query ? `?${query}` : '');
-  const sig = crypto.createHmac('sha256', secretKey).update(prehash).digest('base64');
-  return { ts, sig };
-}
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function okxGet(client, requestPath, params = {}) {
-  const url = new URL(client.baseUrl + requestPath);
-  for (const [k, v] of Object.entries(params)) {
-    if (v === undefined || v === null || v === '') continue;
-    url.searchParams.set(k, String(v));
-  }
-  const query = url.searchParams.toString();
-
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const { ts, sig } = sign(client.secretKey, 'GET', requestPath, query);
-    const headers = {
-      'OK-ACCESS-KEY': client.apiKey,
-      'OK-ACCESS-SIGN': sig,
-      'OK-ACCESS-TIMESTAMP': ts,
-      'OK-ACCESS-PASSPHRASE': client.passphrase,
-      'Content-Type': 'application/json',
-    };
-    if (client.demo) {
-      headers['x-simulated-trading'] = '1';
-    }
-    const res = await fetch(url.toString(), {
-      method: 'GET',
-      headers,
-    });
-    const text = await res.text();
-    if (res.status === 429) {
-      await sleep(Math.min(60000, 800 * (2 ** attempt)));
-      continue;
-    }
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${text.slice(0, 500)}`);
-    }
-
-    let json;
-    try {
-      json = JSON.parse(text);
-    } catch {
-      throw new Error(`Bad JSON: ${text.slice(0, 200)}`);
-    }
-
-    if (json.code === '50011' || json.code === '50013' || json.code === '50061') {
-      await sleep(Math.min(60000, 800 * (2 ** attempt)));
-      continue;
-    }
-    if (json.code !== '0') {
-      throw new Error(`OKX code=${json.code} msg=${json.msg}`);
-    }
-    await sleep(120);
-    return Array.isArray(json.data) ? json.data : [];
-  }
-  throw new Error(`Too many retries for ${requestPath}`);
 }
 
 function jsonl(filePath) {
@@ -498,124 +381,6 @@ async function exportViaCli(profile, args) {
   return summary;
 }
 
-async function fetchWindowPagedRest(client, requestPath, params, cursorKeys) {
-  const rows = [];
-  let after;
-  for (let i = 0; i < 100; i++) {
-    const page = await okxGet(client, requestPath, { ...params, after, limit: 100 });
-    if (!Array.isArray(page) || page.length === 0) break;
-    rows.push(...page);
-    const cursor = pickCursor(page[page.length - 1], cursorKeys);
-    if (!cursor || cursor === after) break;
-    after = cursor;
-    if (page.length < 100) break;
-  }
-  return rows;
-}
-
-async function exportViaRest(profile, args) {
-  const client = loadProfile(profile);
-  fs.mkdirSync(args.outDir, { recursive: true });
-
-  const swapBillsPath = path.join(args.outDir, 'bills_SWAP_archive.jsonl');
-  const futuresBillsPath = path.join(args.outDir, 'bills_FUTURES_archive.jsonl');
-  const swapBillsWriter = jsonl(swapBillsPath);
-  const futuresBillsWriter = jsonl(futuresBillsPath);
-
-  let swapBillsN = 0;
-  let after;
-  for (let i = 0; i < 500; i++) {
-    const page = await okxGet(client, '/api/v5/account/bills-archive', { instType: 'SWAP', limit: 100, after });
-    if (!page.length) break;
-    for (const row of page) swapBillsWriter.write(row);
-    swapBillsN += page.length;
-    const cursor = pickCursor(page[page.length - 1], ['billId']);
-    if (!cursor || cursor === after) break;
-    after = cursor;
-  }
-  swapBillsWriter.end();
-
-  let futBillsN = 0;
-  after = undefined;
-  for (let i = 0; i < 500; i++) {
-    const page = await okxGet(client, '/api/v5/account/bills-archive', { instType: 'FUTURES', limit: 100, after });
-    if (!page.length) break;
-    for (const row of page) futuresBillsWriter.write(row);
-    futBillsN += page.length;
-    const cursor = pickCursor(page[page.length - 1], ['billId']);
-    if (!cursor || cursor === after) break;
-    after = cursor;
-  }
-  futuresBillsWriter.end();
-
-  const instSet = new Set();
-  if (fs.existsSync(swapBillsPath)) {
-    const lines = fs.readFileSync(swapBillsPath, 'utf8').split(/\r?\n/).filter(Boolean);
-    for (const line of lines) {
-      try {
-        const row = JSON.parse(line);
-        if (row?.instId) instSet.add(row.instId);
-      } catch {
-        // ignore malformed line
-      }
-    }
-  }
-
-  const instIds = Array.from(instSet).sort();
-  fs.writeFileSync(path.join(args.outDir, 'swap_instIds.txt'), instIds.join('\n'));
-
-  const totals = [];
-  for (const instId of instIds) {
-    const safe = instId.replace(/[^A-Za-z0-9\-]/g, '_');
-    const fillsPath = path.join(args.outDir, `fills_SWAP_${safe}.jsonl`);
-    const ordersPath = path.join(args.outDir, `orders_SWAP_${safe}.jsonl`);
-    const fillsWriter = jsonl(fillsPath);
-    const ordersWriter = jsonl(ordersPath);
-    let fillsN = 0;
-    let ordN = 0;
-
-    for (const [begin, end] of rangeChunksMs(args.days, 7)) {
-      const fillsPage = await fetchWindowPagedRest(
-        client,
-        '/api/v5/trade/fills-history',
-        { instType: 'SWAP', instId, begin, end },
-        ['tradeId', 'fillId', 'ordId'],
-      );
-      for (const row of fillsPage) {
-        fillsWriter.write(row);
-      }
-      fillsN += fillsPage.length;
-
-      const ordersPage = await fetchWindowPagedRest(
-        client,
-        '/api/v5/trade/orders-history-archive',
-        { instType: 'SWAP', instId, begin, end },
-        ['ordId', 'clOrdId'],
-      );
-      for (const row of ordersPage) {
-        ordersWriter.write(row);
-      }
-      ordN += ordersPage.length;
-    }
-
-    fillsWriter.end();
-    ordersWriter.end();
-    totals.push({ instId, fillsN, ordN, transport: 'rest-fallback' });
-  }
-
-  const summary = {
-    profile,
-    days: args.days,
-    swapBillsN,
-    futBillsN,
-    instIdCount: instIds.length,
-    totals,
-    transport: 'rest-fallback',
-  };
-  fs.writeFileSync(path.join(args.outDir, 'SUMMARY.json'), JSON.stringify(summary, null, 2));
-  return summary;
-}
-
 async function exportBillsArchive(client, instType, outPath) {
   const w = jsonl(outPath);
   let after;
@@ -752,13 +517,8 @@ async function main() {
       return summary;
     });
   } catch (err) {
-    process.stderr.write(`[okx-export] MCP transport failed, falling back: ${err?.message ?? err}\n`);
-    try {
-      summary = await exportViaRest(args.profile, args);
-    } catch (restErr) {
-      process.stderr.write(`[okx-export] REST fallback failed, trying official CLI: ${restErr?.message ?? restErr}\n`);
-      summary = await exportViaCli(args.profile, args);
-    }
+    process.stderr.write(`[okx-export] MCP transport failed, falling back to official CLI: ${err?.message ?? err}\n`);
+    summary = await exportViaCli(args.profile, args);
   }
 
   console.log(JSON.stringify(summary));
