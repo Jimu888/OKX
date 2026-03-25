@@ -1,0 +1,23 @@
+{
+  "name": "okx-trade-history-analyzer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "pipeline": "powershell -NoProfile -ExecutionPolicy Bypass -File .\\\\scripts\\\\run_pipeline.ps1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jimu888/okx-trade-history-analyzer.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/Jimu888/okx-trade-history-analyzer/issues"
+  },
+  "homepage": "https://github.com/Jimu888/okx-trade-history-analyzer#readme",
+  "private": "true"
+}
