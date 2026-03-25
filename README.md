@@ -5,6 +5,31 @@ One-command pipeline powered by the official OKX Agent Trade Kit to:
 - Analyze behavior/performance
 - Generate an objective report, an agent writing task, and a final letter webpage
 
+## What TradeMate Is
+
+TradeMate 不是一个交易信号工具，也不是一个下单助手，而是一个基于 OKX Agent Trade Kit 构建的交易陪伴系统。
+
+它读取你的历史交易数据，识别行为模式、风险来源和优势场景，再通过 Agent 生成一份可持续追问、可持续复盘、可持续成长的个性化总结。
+
+说得更简单一点：TradeMate 帮你了解自己的交易行为和习惯，并陪伴和帮助你成长。
+
+它不帮你更快地下单，而是帮助你看清自己是如何交易的。它会把用户的历史订单、成交、盈亏和成本数据进行统一处理，进一步识别交易风格、重复错误、风险来源与优势场景，再通过 Agent 生成一份可追问、可复盘、可持续成长的阶段总结。
+
+很多交易产品在分析市场，TradeMate 在分析交易者本人。
+
+它不只是告诉你赚了还是亏了，而是进一步回答：
+
+- 我在交易里真正擅长的是什么，不擅长什么？
+- 我在哪类资产、哪类节奏、哪类市场环境下表现更好？
+- 我平时更像哪种交易者：波段型、冲动型、趋势型，还是别的类型？
+- 我的亏损主要来自哪里？
+- 哪些交易真的在为我赚钱，哪些交易只是在制造忙碌感？
+- 我有哪些优势还没有被稳定发挥出来？
+
+TradeMate 也不是给你一堆冰冷数据。它会把分析结果整理成一份更温暖的内容，真正像一个朋友一样和你聊聊交易。
+
+Agent 的价值，不该只是把“下单”这件事做得更快，而是要把“理解交易、总结行为、持续陪伴、帮助成长”这件事做得更自然、更个性化。未来的 AI 交易产品，不只是执行工具，更是本就孤独的交易者身边最贴心的小伙伴。
+
 ## Quick start
 
 1) Configure your OKX API credentials in `~/.okx/config.toml` so the official OKX Agent Trade Kit can read them.

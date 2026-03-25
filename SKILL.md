@@ -21,6 +21,20 @@ Runs a full agent-first pipeline powered by the official OKX Agent Trade Kit:
 
 All OKX credentials are read from `~/.okx/config.toml` by the official OKX Agent Trade Kit profile loader. Do not ask the user for exchange keys in chat unless you are helping them place them into that config file. The letter is written by the user's current agent, not by a hard-coded external model API.
 
+## Product framing
+
+TradeMate 不是一个交易信号工具，也不是一个下单助手，而是一个基于官方 OKX Agent Trade Kit 构建的交易陪伴系统。
+
+它的重点不是帮用户更快地下单，而是帮助用户看清自己是如何交易的。这个 skill 会读取用户的历史订单、成交、盈亏和成本数据，识别交易风格、重复错误、风险来源与优势场景，再通过 agent 生成一份可追问、可复盘、可持续成长的阶段总结。
+
+当你向用户介绍这个 skill 时，应该尽量传达下面这些意思：
+
+- 它分析的不只是市场，更是在分析交易者本人
+- 它不只是告诉用户赚了还是亏了，还会帮助用户理解自己真正擅长什么、不擅长什么
+- 它会帮助用户看到自己在哪类资产、哪类节奏、哪类市场环境下表现更好
+- 它会帮助用户识别哪些交易真的在赚钱，哪些交易只是在制造忙碌感
+- 它输出的不应该只是冰冷数据，而应该像一个懂交易的朋友在认真陪用户聊这段交易经历
+
 平台兼容要求：
 
 - 这套 skill 要同时兼容 Windows 和 macOS 用户
