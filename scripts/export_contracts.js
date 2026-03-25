@@ -78,7 +78,7 @@ class McpClient {
     this.command = command;
     this.args = args;
     this.proc = null;
-    this.buffer = Buffer.alloc(0);
+    this.lineBuffer = '';
     this.nextId = 1;
     this.pending = new Map();
     this.ready = false;
@@ -168,72 +168,25 @@ class McpClient {
 
   sendRaw(payload) {
     if (!this.proc?.stdin) throw new Error('MCP process is not running');
-    const body = Buffer.from(JSON.stringify(payload), 'utf8');
-    const header = Buffer.from(`Content-Length: ${body.length}\r\n\r\n`, 'utf8');
-    this.proc.stdin.write(Buffer.concat([header, body]));
+    this.proc.stdin.write(JSON.stringify(payload) + '\n');
   }
 
   onStdout(chunk) {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
+    this.lineBuffer += chunk.toString('utf8');
+    const lines = this.lineBuffer.split(/\r?\n/);
+    this.lineBuffer = lines.pop() ?? '';
 
-    while (true) {
-      const contentIdx = this.findHeaderStart();
-      if (contentIdx === -1) {
-        if (this.buffer.length > 64 * 1024) {
-          this.buffer = this.buffer.subarray(this.buffer.length - 8 * 1024);
-        }
-        return;
-      }
-      if (contentIdx > 0) {
-        this.buffer = this.buffer.subarray(contentIdx);
-      }
-
-      const headerEnd = this.findHeaderEnd();
-      if (headerEnd === -1) return;
-
-      const headerText = this.buffer.slice(0, headerEnd).toString('utf8');
-      const headers = {};
-      for (const line of headerText.split(/\r?\n/)) {
-        const idx = line.indexOf(':');
-        if (idx === -1) continue;
-        headers[line.slice(0, idx).trim().toLowerCase()] = line.slice(idx + 1).trim();
-      }
-
-      const len = Number(headers['content-length']);
-      if (!Number.isFinite(len) || len < 0) {
-        throw new Error(`Invalid MCP message headers: ${headerText}`);
-      }
-
-      const separatorLen = this.buffer[headerEnd] === 13 ? 4 : 2;
-      const totalLen = headerEnd + separatorLen + len;
-      if (this.buffer.length < totalLen) return;
-
-      const body = this.buffer.slice(headerEnd + separatorLen, totalLen).toString('utf8');
-      this.buffer = this.buffer.slice(totalLen);
-
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
       let msg;
       try {
-        msg = JSON.parse(body);
-      } catch (err) {
-        throw new Error(`Failed to parse MCP message: ${body.slice(0, 200)}`);
+        msg = JSON.parse(trimmed);
+      } catch {
+        continue;
       }
-
       this.handleMessage(msg);
     }
-  }
-
-  findHeaderStart() {
-    const exact = this.buffer.indexOf('Content-Length:');
-    if (exact !== -1) return exact;
-
-    const lower = this.buffer.toString('utf8').toLowerCase();
-    return lower.indexOf('content-length:');
-  }
-
-  findHeaderEnd() {
-    const crlf = this.buffer.indexOf('\r\n\r\n');
-    if (crlf !== -1) return crlf;
-    return this.buffer.indexOf('\n\n');
   }
 
   handleMessage(msg) {
