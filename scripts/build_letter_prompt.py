@@ -22,6 +22,11 @@ def fmt_money(x):
     return f'{sign}{value:,.2f}'
 
 
+def fmt_abs_money(x):
+    value = abs(safe_float(x))
+    return f'{value:,.2f}'
+
+
 def fmt_pct(x):
     return f'{safe_float(x) * 100:.1f}%'
 
@@ -76,7 +81,9 @@ def build_fact_pack(analysis):
         f'订单口径胜率：{fmt_pct(q.get("win_rate"))}',
         f'订单口径盈亏比 RR：{safe_float(q.get("rr")):.2f}',
         f'订单口径 Profit Factor：{safe_float(q.get("profit_factor")):.2f}',
-        f'最大回撤：{fmt_money(e.get("max_drawdown"))} USDT',
+        f'平均单笔盈利：{fmt_money(q.get("avg_win"))} USDT',
+        f'平均单笔亏损：{fmt_money(q.get("avg_loss"))} USDT',
+        f'最大回撤：{fmt_abs_money(e.get("max_drawdown"))} USDT',
         f'最大连续亏损单数：{int(e.get("max_consecutive_loss", 0))}',
         f'活跃交易日：{int(fills.get("active_days", 0))} 天',
         f'成交总笔数：{int(fills.get("rows", 0))} 笔',
@@ -209,6 +216,10 @@ def build_prompt(character_name, report_text, fact_pack, output_path):
 10. 标题必须由你根据本次数据自己提炼，不能使用默认标题如“{character_name} 的信”或“写给你的一封信”
 11. 开场第一段必须高度精炼地概括该用户最突出的交易习惯、交易方式或性格特点，不能写成“我看了你很久”“我有很多想法想跟你聊聊”这类空泛开场
 12. 如果事实包里提供了“最常交易品种”或“反复交易但胜率较差的品种”，请自然写进正文，帮助用户看见自己的偏好和盲点
+13. 只要材料里存在明显的正向证据，就必须写出来，不能只写亏损和问题
+14. 如果盈亏比 RR、Profit Factor、平均单笔盈利、净收益靠前品种、最常交易品种中的任一项显示出明显优势，必须结合至少一个具体盈利交易特征或盈利品种来解释“用户到底擅长什么”
+15. 如果整体结果为亏损，但局部存在亮点，也必须同时写出“亮点在哪里、为什么没有被稳定放大”，不能只留下负面印象
+16. 不要只夸抽象指标，例如只说“盈亏比很高”却不解释盈利来自哪些品种、哪些交易特征、哪些行为习惯
 
 ## 风格边界
 
@@ -222,6 +233,7 @@ def build_prompt(character_name, report_text, fact_pack, output_path):
 - 少报数字，多讲这些数字共同指向了什么样的交易习惯和心理结构
 - 可以给建议，但建议应该像朋友的提醒和陪伴，而不是命令
 - 要敢于往更深层的心理、情绪、习惯结构去分析，但前提仍然是有数据依据
+- 如果有优点，就认真写优点；如果有问题，就坦诚写问题；整体上要平衡、真实、完整
 
 ## 输出格式
 

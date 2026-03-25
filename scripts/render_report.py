@@ -10,6 +10,13 @@ def fmt_money(x):
     except Exception:
         return str(x)
 
+
+def fmt_amount(x):
+    try:
+        return f"{abs(float(x)):,.2f}"
+    except Exception:
+        return str(x)
+
 def fmt_pct(x):
     try:
         return f"{float(x)*100:.2f}%"
@@ -88,7 +95,7 @@ def main():
     lines.append(f'- Profit Factor：{(q_ord.get("profit_factor",0) if math.isfinite(q_ord.get("profit_factor",0)) else 0):.2f}')
     lines.append(f'- 最大连续盈利单数：{e_ord.get("max_consecutive_win",0)}')
     lines.append(f'- 最大连续亏损单数：{e_ord.get("max_consecutive_loss",0)}')
-    lines.append(f'- 最大回撤估算（订单净值曲线）：{fmt_money(e_ord.get("max_drawdown",0))} USDT')
+    lines.append(f'- 最大回撤估算（订单净值曲线）：{fmt_amount(e_ord.get("max_drawdown",0))} USDT')
     lines.append('')
 
     lines.append('### 1.2 行为证据（逐笔口径）')
@@ -96,7 +103,7 @@ def main():
     lines.append(f'- 盈亏比RR：{(q_fill.get("rr",0) if math.isfinite(q_fill.get("rr",0)) else 0):.2f}')
     lines.append(f'- Profit Factor：{(q_fill.get("profit_factor",0) if math.isfinite(q_fill.get("profit_factor",0)) else 0):.2f}')
     lines.append(f'- 最大连续亏损笔数：{e_fill.get("max_consecutive_loss",0)}')
-    lines.append(f'- 最大回撤估算（逐笔净值曲线）：{fmt_money(e_fill.get("max_drawdown",0))} USDT')
+    lines.append(f'- 最大回撤估算（逐笔净值曲线）：{fmt_amount(e_fill.get("max_drawdown",0))} USDT')
     lines.append('')
 
     lines.append('## 2）品种维度（bills 资金口径）')

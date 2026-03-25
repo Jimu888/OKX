@@ -15,6 +15,13 @@ def fmt_money(x):
         return str(x)
 
 
+def fmt_amount(x):
+    try:
+        return f"{abs(float(x)):.2f}"
+    except Exception:
+        return str(x)
+
+
 def dt_cn_iso(iso):
     if not iso:
         return ''
@@ -111,7 +118,7 @@ def build_metric_cards(analysis):
         ('合约净收益', fmt_money(bills.get('net_total', 0))),
         ('手续费', fmt_money(bills.get('fee_total', 0))),
         ('胜率', fmt_pct(orders.get('quality_order', {}).get('win_rate', 0))),
-        ('最大回撤', fmt_money(orders.get('equity_order', {}).get('max_drawdown', 0))),
+        ('最大回撤', fmt_amount(orders.get('equity_order', {}).get('max_drawdown', 0))),
         (f'{best.get("instId", "主力品种")} 净结果', fmt_money(best.get('net', 0))),
         (f'{worst.get("instId", "风险品种")} 净结果', fmt_money(worst.get('net', 0))),
     ]
