@@ -90,6 +90,19 @@ class McpClient {
       env: process.env,
     });
 
+    await new Promise((resolve, reject) => {
+      const onSpawn = () => {
+        this.proc?.off('error', onError);
+        resolve();
+      };
+      const onError = (err) => {
+        this.proc?.off('spawn', onSpawn);
+        reject(err);
+      };
+      this.proc.once('spawn', onSpawn);
+      this.proc.once('error', onError);
+    });
+
     this.proc.stdout.on('data', (chunk) => this.onStdout(chunk));
     this.proc.stderr.on('data', (chunk) => {
       const text = chunk.toString('utf8').trim();
@@ -102,6 +115,12 @@ class McpClient {
       }
       this.pending.clear();
       this.proc = null;
+    });
+    this.proc.on('error', (err) => {
+      for (const { reject } of this.pending.values()) {
+        reject(err);
+      }
+      this.pending.clear();
     });
 
     await this.request('initialize', {
@@ -211,10 +230,13 @@ class McpClient {
 }
 
 async function withMcpClient(profile, fn) {
-  const command = process.env.OKX_MCP_CMD || 'npx';
-  const args = process.env.OKX_MCP_CMD
+  const custom = process.env.OKX_MCP_CMD?.trim();
+  const command = custom || (process.platform === 'win32' ? 'cmd' : 'npx');
+  const args = custom
     ? []
-    : ['-y', '@okx_ai/okx-trade-mcp', '--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log'];
+    : process.platform === 'win32'
+      ? ['/c', 'npx', '-y', '@okx_ai/okx-trade-mcp', '--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log']
+      : ['-y', '@okx_ai/okx-trade-mcp', '--profile', profile, '--modules', 'account,swap', '--read-only', '--no-log'];
   const client = new McpClient(command, args);
   try {
     await client.start();

@@ -1,12 +1,23 @@
 param(
   [string]$Profile = "live",
   [int]$Days = 90,
-  [string]$Name = "澜"
+  [string]$Name = "TradeMate"
 )
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
-# Ensure OKX_* env vars won't override ~/.okx/config.toml
+function Assert-LastExitCode {
+  param(
+    [string]$StepName
+  )
+
+  if ($LASTEXITCODE -ne 0) {
+    throw "$StepName failed with exit code $LASTEXITCODE"
+  }
+}
+
+# Ensure OKX_* env vars cannot override ~/.okx/config.toml
 $env:OKX_API_KEY=$null
 $env:OKX_SECRET_KEY=$null
 $env:OKX_PASSPHRASE=$null
@@ -22,33 +33,38 @@ $output = Join-Path $run 'output'
 
 New-Item -ItemType Directory -Force -Path $raw,$analysis,$output | Out-Null
 
-# 1) Export
-node (Join-Path $root 'scripts\\export_contracts.js') --profile $Profile --days $Days --out $raw | Out-Null
+& node (Join-Path $root 'scripts\\export_contracts.js') --profile $Profile --days $Days --out $raw
+Assert-LastExitCode 'Export'
 
-# 2) Analyze
-python (Join-Path $root 'scripts\\analyze_contracts.py') --raw $raw --out $analysis | Out-Null
+$rawFiles = Get-ChildItem -Path $raw -File -ErrorAction SilentlyContinue | Where-Object { $_.Length -gt 0 }
+if (-not $rawFiles) {
+  throw "Export produced no raw data. Stop here to avoid generating an empty report."
+}
 
-# 3) Render report
-python (Join-Path $root 'scripts\\render_report.py') --analysis (Join-Path $analysis 'analysis.json') --out $output | Out-Null
+& python (Join-Path $root 'scripts\\analyze_contracts.py') --raw $raw --out $analysis
+Assert-LastExitCode 'Analyze'
 
-# 4) Build agent letter task
-python (Join-Path $root 'scripts\\build_letter_prompt.py') `
+& python (Join-Path $root 'scripts\\render_report.py') --analysis (Join-Path $analysis 'analysis.json') --out $output
+Assert-LastExitCode 'Render report'
+
+& python (Join-Path $root 'scripts\\build_letter_prompt.py') `
   --analysis (Join-Path $analysis 'analysis.json') `
   --report (Join-Path $output 'REPORT.md') `
   --out $output `
-  --name $Name | Out-Null
+  --name $Name
+Assert-LastExitCode 'Build letter prompt'
 
-# 5) Render final outputs if LETTER.md already exists
 if (Test-Path (Join-Path $output 'LETTER.md')) {
-  python (Join-Path $root 'scripts\\render_letter_html.py') `
+  & python (Join-Path $root 'scripts\\render_letter_html.py') `
     --analysis (Join-Path $analysis 'analysis.json') `
     --template (Join-Path $root 'assets\\letter-version.template.html') `
     --letter-md (Join-Path $output 'LETTER.md') `
-    --out $output | Out-Null
+    --out $output
+  Assert-LastExitCode 'Render letter HTML'
 } else {
-  Write-Host "[NEXT] 已生成写信任务：$(Join-Path $output 'LETTER_PROMPT.md')"
-  Write-Host "[NEXT] 请让 agent 根据该提示词写入：$(Join-Path $output 'LETTER.md')"
-  Write-Host "[NEXT] 写完后再运行 render_letter_html.py 生成网页。"
+  Write-Host "[NEXT] Letter prompt generated: $(Join-Path $output 'LETTER_PROMPT.md')"
+  Write-Host "[NEXT] Ask the agent to write: $(Join-Path $output 'LETTER.md')"
+  Write-Host "[NEXT] After that, run render_letter_html.py to generate the webpage."
 }
 
 Write-Host "DONE: $run"
