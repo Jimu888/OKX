@@ -114,11 +114,18 @@ def build_metric_cards(analysis):
     best = by_inst[0] if by_inst else {'instId': '主力品种', 'net': 0}
     worst = sorted(by_inst, key=lambda row: safe_float(row.get('net')))[0] if by_inst else {'instId': '风险品种', 'net': 0}
 
+    q = (orders.get('quality_order') or {})
+    e = (orders.get('equity_order') or {})
+    has_order_pnl = bool(orders.get('has_pnl'))
+
+    win_rate = fmt_pct(q.get('win_rate', 0)) if has_order_pnl else 'N/A'
+    mdd = fmt_amount(e.get('max_drawdown', 0)) if has_order_pnl else 'N/A'
+
     return [
         ('合约净收益', fmt_money(bills.get('net_total', 0))),
         ('手续费', fmt_money(bills.get('fee_total', 0))),
-        ('胜率', fmt_pct(orders.get('quality_order', {}).get('win_rate', 0))),
-        ('最大回撤', fmt_amount(orders.get('equity_order', {}).get('max_drawdown', 0))),
+        ('胜率', win_rate),
+        ('最大回撤', mdd),
         (f'{best.get("instId", "主力品种")} 净结果', fmt_money(best.get('net', 0))),
         (f'{worst.get("instId", "风险品种")} 净结果', fmt_money(worst.get('net', 0))),
     ]
