@@ -68,6 +68,7 @@ Agent 的价值，不该只是把“下单”这件事做得更快，而是要�
 
 2) Run the pipeline:
 
+### OKX mode
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile live -Days 60 -Name 澜
 ```
@@ -76,6 +77,20 @@ macOS 如果已安装 PowerShell 7，也可以使用：
 
 ```bash
 pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile live -Days 60 -Name 澜
+```
+
+### Binance USDM futures export CSV mode
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline_auto.ps1 -Exchange binance -Name 几木 `
+  -OrdersCsv C:\path\to\orders.csv `
+  -TradesCsv C:\path\to\trades.csv `
+  -IncomeCsv C:\path\to\income.csv
+```
+
+### Auto-detect
+如果你传入任意一个 *Csv 参数，会自动切到 Binance；否则默认跑 OKX。
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline_auto.ps1 -Name 几木 -Days 60
 ```
 
 3) After the pipeline finishes, ask your agent to open:

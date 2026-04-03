@@ -126,6 +126,7 @@ When the user installs or invokes this skill, you should:
 
 Use the PowerShell pipeline script (recommended):
 
+### OKX mode
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline.ps1 -Profile live -Days 60 -Name 澜
 ```
@@ -134,6 +135,21 @@ For macOS users with PowerShell 7:
 
 ```bash
 pwsh -NoProfile -File ./scripts/run_pipeline.ps1 -Profile live -Days 60 -Name 澜
+```
+
+### Binance USDM futures export CSV mode
+(Use the 3 CSVs exported via the new Binance skills: orders / trades / income)
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline_auto.ps1 -Exchange binance -Name 几木 `
+  -OrdersCsv C:\path\to\orders.csv `
+  -TradesCsv C:\path\to\trades.csv `
+  -IncomeCsv C:\path\to\income.csv
+```
+
+### Auto-detect
+If you pass any of the *Csv parameters, it will auto-switch to Binance mode; otherwise it runs OKX export mode.
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\run_pipeline_auto.ps1 -Name 几木 -Days 60
 ```
 
 Outputs are written under:

@@ -45,6 +45,19 @@ def main():
     orders=d['orders_summary']
     by_inst=d['by_instrument_bills']
 
+    # Try to infer exchange/source from raw_dir metadata
+    meta = {}
+    raw_dir = cov.get('raw_dir')
+    if raw_dir:
+        mp = os.path.join(raw_dir, 'IMPORT_META.json')
+        if os.path.exists(mp):
+            try:
+                with open(mp, 'r', encoding='utf-8') as mf:
+                    meta = json.load(mf)
+            except Exception:
+                meta = {}
+    exchange = (meta.get('exchange') or '').lower() or 'okx'
+
     start_cn = cov.get('time_range_cn',{}).get('start')
     end_cn = cov.get('time_range_cn',{}).get('end')
     if start_cn:
@@ -59,7 +72,8 @@ def main():
     insts = ', '.join(cov.get('instIds') or [])
 
     lines=[]
-    lines.append('# OKX CEX 合约交易分析报告（全面版）')
+    title_ex = 'OKX' if exchange=='okx' else ('Binance' if exchange=='binance' else exchange.upper())
+    lines.append(f'# {title_ex} 合约交易分析报告（全面版）')
     lines.append('')
     lines.append('## 0）数据覆盖与口径说明')
     lines.append(f'- 覆盖时间：{start_cn} ～ {end_cn}（北京时间）')
@@ -78,24 +92,29 @@ def main():
     lines.append(f'- 已实现盈亏（bills）：{fmt_money(bills.get("pnl_total",0))} USDT')
     lines.append(f'- 手续费（bills）：{fmt_money(bills.get("fee_total",0))} USDT')
     lines.append(f'- 资金费（估算，bills type=8）：{fmt_money(bills.get("funding_est",0))} USDT')
+    if fills.get('fee_other_total'):
+        lines.append(f'- 手续费（非USDT计价，未折算）：{fmt_money(fills.get("fee_other_total",0))}（按原币种汇总）')
     lines.append('')
     lines.append(f'- 活跃交易日（fills）：{fills.get("active_days",0)} 天')
     lines.append(f'- 成交笔数（fills）：{fills.get("rows",0)} 笔')
     lines.append(f'- 活跃日内日均交易频次：{fills.get("trades_per_active_day",0):.1f} 笔/天')
     lines.append('')
 
-    q_ord=orders.get('quality_order',{})
-    e_ord=orders.get('equity_order',{})
+    q_ord=orders.get('quality_order') or {}
+    e_ord=orders.get('equity_order') or {}
     q_fill=fills.get('quality_fill',{})
     e_fill=fills.get('equity_fill',{})
 
     lines.append('### 1.1 交易质量（订单口径，参考）')
-    lines.append(f'- 胜率：{fmt_pct(q_ord.get("win_rate",0))}')
-    lines.append(f'- 盈亏比RR：{(q_ord.get("rr",0) if math.isfinite(q_ord.get("rr",0)) else 0):.2f}')
-    lines.append(f'- Profit Factor：{(q_ord.get("profit_factor",0) if math.isfinite(q_ord.get("profit_factor",0)) else 0):.2f}')
-    lines.append(f'- 最大连续盈利单数：{e_ord.get("max_consecutive_win",0)}')
-    lines.append(f'- 最大连续亏损单数：{e_ord.get("max_consecutive_loss",0)}')
-    lines.append(f'- 最大回撤估算（订单净值曲线）：{fmt_amount(e_ord.get("max_drawdown",0))} USDT')
+    if orders.get('has_pnl'):
+        lines.append(f'- 胜率：{fmt_pct(q_ord.get("win_rate",0))}')
+        lines.append(f'- 盈亏比RR：{(q_ord.get("rr",0) if math.isfinite(q_ord.get("rr",0)) else 0):.2f}')
+        lines.append(f'- Profit Factor：{(q_ord.get("profit_factor",0) if math.isfinite(q_ord.get("profit_factor",0)) else 0):.2f}')
+        lines.append(f'- 最大连续盈利单数：{e_ord.get("max_consecutive_win",0)}')
+        lines.append(f'- 最大连续亏损单数：{e_ord.get("max_consecutive_loss",0)}')
+        lines.append(f'- 最大回撤估算（订单净值曲线）：{fmt_amount(e_ord.get("max_drawdown",0))} USDT')
+    else:
+        lines.append('- 本交易所的订单导出不包含“订单级已实现盈亏/手续费”，此处不输出胜率/盈亏比等指标，避免误导。')
     lines.append('')
 
     lines.append('### 1.2 行为证据（逐笔口径）')

@@ -135,11 +135,18 @@ def main():
     bill_times=[ms_to_dt(r.get('ts') or r.get('fillTime') or r.get('uTime')) for r in bills]
     bill_times=[t for t in bill_times if t]
     fill_rows=[]
+    fee_other_total=0.0
+    fee_other_by_asset=defaultdict(float)
     for r in fills:
         t=ms_to_dt(r.get('fillTime') or r.get('ts'))
         if not t: continue
         pnl=float(r.get('fillPnl') or 0)
         fee=float(r.get('fee') or 0)
+        fee_other=float(r.get('feeOther') or 0)
+        fee_other_asset=r.get('feeOtherAsset')
+        if fee_other_asset:
+            fee_other_total += fee_other
+            fee_other_by_asset[str(fee_other_asset)] += fee_other
         fill_rows.append((t, r.get('instId') or 'UNKNOWN', pnl, fee))
     fill_rows.sort(key=lambda x: x[0])
 
@@ -211,6 +218,8 @@ def main():
         'by_wday_cn': dict(by_wday),
         'quality_fill': summarize_pnl(fill_net),
         'equity_fill': equity_metrics(fill_net),
+        'fee_other_total': fee_other_total,
+        'fee_other_by_asset': dict(fee_other_by_asset),
     }
 
     # orders summary
@@ -220,19 +229,28 @@ def main():
     side=Counter([o.get('side') for _,_,_,_,o in order_rows])
     posSide=Counter([o.get('posSide') for _,_,_,_,o in order_rows])
 
+    ord_pnl_total = sum([p for _,_,p,_,_ in order_rows])
+    ord_fee_total = sum([f for _,_,_,f,_ in order_rows])
+    ord_net_total = sum(ord_net)
+
+    # Some exchanges (e.g., Binance orders export) do not include realized pnl/fee at order level.
+    # If all-zero, do not compute win-rate/PF/etc. to avoid misleading output.
+    has_order_pnl = any(abs(x) > 1e-12 for x in ord_net)
+
     orders_summary={
         'rows': len(order_rows),
         'start_utc': order_rows[0][0].isoformat() if order_rows else None,
         'end_utc': order_rows[-1][0].isoformat() if order_rows else None,
-        'pnl_total': sum([p for _,_,p,_,_ in order_rows]),
-        'fee_total': sum([f for _,_,_,f,_ in order_rows]),
-        'net_total': sum(ord_net),
+        'pnl_total': ord_pnl_total,
+        'fee_total': ord_fee_total,
+        'net_total': ord_net_total,
         'state': dict(state),
         'ordType': dict(ordType),
         'side': dict(side),
         'posSide': dict(posSide),
-        'quality_order': summarize_pnl(ord_net),
-        'equity_order': equity_metrics(ord_net)
+        'has_pnl': has_order_pnl,
+        'quality_order': summarize_pnl(ord_net) if has_order_pnl else None,
+        'equity_order': equity_metrics(ord_net) if has_order_pnl else None,
     }
 
     # per symbol bills table

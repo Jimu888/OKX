@@ -65,12 +65,14 @@ def build_fact_pack(analysis):
     by_inst = analysis.get('by_instrument_bills', [])
     by_inst_behavior = analysis.get('by_instrument_behavior', [])
 
-    q = orders.get('quality_order', {})
-    e = orders.get('equity_order', {})
+    q = orders.get('quality_order') or {}
+    e = orders.get('equity_order') or {}
     fee_ratio = 0.0
     pnl_abs = abs(safe_float(bills.get('pnl_total')))
     if pnl_abs > 1e-9:
         fee_ratio = abs(safe_float(bills.get('fee_total'))) / pnl_abs
+
+    has_order_pnl = bool(orders.get('has_pnl'))
 
     facts = [
         f'数据时间段：{iso_to_cn(cov.get("time_range_cn", {}).get("start"))} 至 {iso_to_cn(cov.get("time_range_cn", {}).get("end"))}（北京时间）',
@@ -78,13 +80,13 @@ def build_fact_pack(analysis):
         f'已实现盈亏：{fmt_money(bills.get("pnl_total"))} USDT',
         f'手续费：{fmt_money(bills.get("fee_total"))} USDT',
         f'资金费估算：{fmt_money(bills.get("funding_est"))} USDT',
-        f'订单口径胜率：{fmt_pct(q.get("win_rate"))}',
-        f'订单口径盈亏比 RR：{safe_float(q.get("rr")):.2f}',
-        f'订单口径 Profit Factor：{safe_float(q.get("profit_factor")):.2f}',
-        f'平均单笔盈利：{fmt_money(q.get("avg_win"))} USDT',
-        f'平均单笔亏损：{fmt_money(q.get("avg_loss"))} USDT',
-        f'最大回撤：{fmt_abs_money(e.get("max_drawdown"))} USDT',
-        f'最大连续亏损单数：{int(e.get("max_consecutive_loss", 0))}',
+        f'订单口径胜率：{fmt_pct(q.get("win_rate")) if has_order_pnl else "N/A"}',
+        f'订单口径盈亏比 RR：{safe_float(q.get("rr")):.2f}' if has_order_pnl else '订单口径盈亏比 RR：N/A',
+        f'订单口径 Profit Factor：{safe_float(q.get("profit_factor")):.2f}' if has_order_pnl else '订单口径 Profit Factor：N/A',
+        f'平均单笔盈利：{fmt_money(q.get("avg_win"))} USDT' if has_order_pnl else '平均单笔盈利：N/A',
+        f'平均单笔亏损：{fmt_money(q.get("avg_loss"))} USDT' if has_order_pnl else '平均单笔亏损：N/A',
+        f'最大回撤：{fmt_abs_money(e.get("max_drawdown"))} USDT' if has_order_pnl else '最大回撤：N/A',
+        f'最大连续亏损单数：{int(e.get("max_consecutive_loss", 0))}' if has_order_pnl else '最大连续亏损单数：N/A',
         f'活跃交易日：{int(fills.get("active_days", 0))} 天',
         f'成交总笔数：{int(fills.get("rows", 0))} 笔',
         f'活跃日平均成交频次：{safe_float(fills.get("trades_per_active_day")):.1f} 笔/天',
